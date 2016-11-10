@@ -16,7 +16,7 @@ createSnap() {
 
     time=`date +%s`
 
-    if [ $3 -gt $count ]; then
+    if [ $2 -gt $count ]; then
         # Simply add new snapshot
         zfs snapshot $dataset@$time
 
@@ -26,19 +26,21 @@ createSnap() {
 
     else
         # Delete the snapshot older than rotation count $3
-        echo "Need to delete" $(($3-count)) "snapshot"
-        getOlderSnap $dataset $(($3-count))
+        echo "Need to delete" $(($2-count)) "snapshot"
+        getOlderSnap $dataset $(($2-count))
         if test -z $snaplist; then
             echo "Cannot find snapshot list"
         else
             echo $snaplist
+        fi
     fi
+
 }
 
 # Args : dataset
 countCursnap() {
     # zfs list -r -t snapshot $1
-    conut=`zfs list -r -t snapshot -o zbackup:name $1 | grep -v $1/ | sed -n '2,$p' | grep -v '-' | wc -l`
+    conut=`zfs list -Hr -t snapshot -o zbackup:name $1 | grep -v $1/ | grep -v '-' | wc -l`
 
     return $count
 }
