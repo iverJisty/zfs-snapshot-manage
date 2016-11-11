@@ -27,11 +27,17 @@ createSnap() {
     else
         # Delete the snapshot older than rotation count $3
         echo "Need to delete" $((count-$2)) "snapshot"
+
         getOlderSnap $dataset $((count-$2))
-        if test -z $snaplist; then
+        if test -z "$snaplist"; then
             echo "Cannot find snapshot list"
         else
-            echo $snaplist
+            # Delete the entry in $snaplist
+            for i in "$snaplist"
+            do
+                echo $i
+            done
+
         fi
     fi
 
