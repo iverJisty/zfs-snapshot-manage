@@ -3,7 +3,7 @@
 snaplist=""
 
 getOlderSnap() {
-    snaplist=`zfs list -Hr -t snapshot -o name,zbackup:time $1 | grep -v $1/ | sort -k 2 | head -n $2`
+    snaplist=`zfs list -Hr -t snapshot -o name,zbackup:time $1 | grep -v $1/ | grep -v '-' | sort -k 2 | head -n $2`
 
 }
 
@@ -17,6 +17,8 @@ createSnap() {
     time=`date +%s`
 
     if [ $2 -gt $count ]; then
+        echo "Adding new snapshot $dataset@$time"
+
         # Simply add new snapshot
         zfs snapshot $dataset@$time
 
@@ -24,21 +26,35 @@ createSnap() {
         # zfs set zbackup:mark 1 $dataset@$time
         zfs set zbackup:time=$time $dataset@$time
 
+
     else
         # Delete the snapshot older than rotation count $3
-        echo "Need to delete" $((count-$2)) "snapshot"
+        echo "Need to delete" $((count-$2+1)) "snapshot"
 
-        getOlderSnap $dataset $((count-$2))
+        getOlderSnap $dataset $((count-$2+1))
         if test -z "$snaplist"; then
             echo "Cannot find snapshot list"
         else
             # Delete the entry in $snaplist
-            for i in "$snaplist"
+            IFS=$'\n'
+            for i in ${snaplist}
             do
-                echo $i
+                unset IFS
+                local name=`echo $i | cut -d ' ' -f 1`
+                echo "Deleting snapshot : $name"
+                zfs destroy $name
             done
 
         fi
+
+        echo "Adding new snapshot : $dataset@$time"
+
+        # Add new snapshot
+        zfs snapshot $dataset@$time
+
+        # Add our own attribute
+        # zfs set zbackup:mark 1 $dataset@$time
+        zfs set zbackup:time=$time $dataset@$time
     fi
 
 }
@@ -55,6 +71,10 @@ arg=0
 if [ "$1" = "--list" ]; then
     # Format : ./zbackup --list [target_dataset [ID]]
 
+    counter=0
+    tmp=""
+    timestamp=""
+
     # Get dataset name
     if test -z $2; then
         exit
@@ -68,6 +88,36 @@ if [ "$1" = "--list" ]; then
     echo "====List snapshot===="
     echo "Dataset   : $dataset"
     echo "Target ID : $ID"
+    getOlderSnap $dataset 100
+
+    printf "ID\tDataset\t\tTime\n"
+    IFS=$'\n'
+    if test -z $3; then
+        # List all snapshot
+        for i in ${snaplist}
+        do
+            unset IFS
+            counter=$((counter+1))
+            tmp=`echo $i | cut -d ' ' -f 2`
+            timestamp=`date -j -f %s $tmp +"%Y-%m-%d %H:%M:%S"`
+            printf "$counter\t$dataset\t$timestamp\n"
+
+        done
+    else
+        # List the target snapshot
+        for i in ${snaplist}
+        do
+            unset IFS
+            counter=$((counter+1))
+            if [ $counter -eq $3 ]; then
+                tmp=`echo $i | cut -d ' ' -f 2`
+                timestamp=`date -j -f %s $tmp +"%Y-%m-%d %H:%M:%S"`
+                printf "$counter\t$dataset\t$timestamp\n"
+                break
+            fi
+
+        done
+    fi
 
 
 elif [ "$1" = "--delete" ]; then
@@ -83,13 +133,40 @@ elif [ "$1" = "--delete" ]; then
     # Get optional sequence id
     if ! test -z $3; then
         ID=$3
-    else
-        ID=""
     fi
 
     echo "====Deleting snapshot===="
     echo "Dataset   : $dataset"
     echo "Target ID : $ID"
+
+    getOlderSnap $dataset 100
+
+    IFS=$'\n'
+    if test -z $3; then
+        # Delete all snapshot
+        for i in ${snaplist}
+        do
+            unset IFS
+            name=`echo $i | cut -d ' ' -f 1`
+            echo "Deleting snapshot : $name "
+            zfs destroy $name
+
+        done
+    else
+        # Delete the target snapshot
+        for i in ${snaplist}
+        do
+            unset IFS
+            counter=$((counter+1))
+            name=`echo $i | cut -d ' ' -f 1`
+            if [ $counter -eq $3 ]; then
+                zfs destroy $name
+                break
+            fi
+
+        done
+    fi
+
 else
     # Format : ./zbackup target_dataset [rotation count]
 
