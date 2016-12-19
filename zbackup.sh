@@ -67,6 +67,11 @@ countCursnap() {
     return $count
 }
 
+
+if [ "$#" == "0" ]; then
+    echo "Usage: ./zbackup [[--list | --delete] target dataset [ID] | target dataset [rotation count]]"
+fi
+
 arg=0
 if [ "$1" = "--list" ]; then
     # Format : ./zbackup --list [target_dataset [ID]]
