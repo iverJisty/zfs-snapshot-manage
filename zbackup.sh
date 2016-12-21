@@ -1,10 +1,15 @@
 #!/bin/sh
 
+mypath="/usr/local/bin"
 snaplist=""
 
 getOlderSnap() {
     snaplist=`zfs list -Hr -t snapshot -o name,zbackup:time $1 | grep -v $1/ | grep -v '-' | sort -k 2 | head -n $2`
 
+}
+
+getAllDataset() {
+    datasets=`zfs list -Hr -t snapshot -o name,zbackup:time | grep -v '-' | awk '{print $1}' | cut -d '@' -f 1 | uniq`
 }
 
 # Args : dataset, rotation_count
@@ -81,7 +86,17 @@ if [ "$1" = "--list" ]; then
     timestamp=""
 
     # Get dataset name
+
     if test -z $2; then
+
+        datasets=""
+        getAllDataset
+        IFS=$'\n'
+        for i in ${datasets}
+        do
+            unset IFS
+            ${mypath}/zbackup --list $i
+        done
         exit
     else
         dataset=$2
