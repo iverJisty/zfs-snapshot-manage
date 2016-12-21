@@ -1,0 +1,32 @@
+#!/bin/sh
+#
+# $FreeBSD: relang/10.3/etc/rc.d/zbackupd 2016-12-18
+# https://www.freebsd.org/doc/en_US.ISO8859-1/articles/rc-scripting/rcng-dummy.html
+
+# PROVIDE: zbackupd
+# REQUIRE: DAEMON
+# KEYWORD: nojail shutdown
+
+. /etc/rc.subr
+
+name="zbackupd"
+rcvar="zbackupd_enable"
+required_files="/usr/local/etc/zbackup.conf"
+start_precmd="${name}_start"
+pidfile="/var/run/zbackupd.pid"
+command="/usr/local/bin/${name}"
+command_interpreter="/usr/local/bin/python2"
+extra_commands="reload list"
+list_cmd="${command} --list"
+
+load_rc_config $name
+: ${zbackup_enable:="NO"}
+
+zbackupd_start(){
+    rc_flags="--daemon --config ${rc_flags:="${required_files}"}"
+}
+
+
+
+run_rc_command $1
+
