@@ -1,8 +1,12 @@
-#!/usr/bin/env python2
+#!/usr/local/bin/python2
 import ConfigParser
 import argparse
 import string,os,sys,time
 import subprocess
+import signal
+import copy
+
+config_arg = None
 
 def min( time ):
     if time[-1] == 'm':
@@ -14,7 +18,51 @@ def min( time ):
     elif time[-1] == 'w':
         return int(time[:-1]) * 24 * 60 * 7
 
+def reloadCfg(signum, frame):
+    # Run daemon again
+    cmd = [ '/usr/local/bin/zbackupd', '--config', config_arg.config[0] ]
+    os.execvp( '/usr/local/bin/zbackupd', cmd )
+
+def writePidfile():
+    pid = os.getpid()
+    f = open('/var/run/zbackupd.pid','w')
+    f.write( str(pid) )
+    f.close()
+
+def closeProg(signum, frame):
+    os.remove('/var/run/zbackupd.pid')
+    sys.exit(0)
+
+def daemonLize( arg ):
+    pid = os.fork()
+    if pid == 0:
+        p = os.fork()
+        if p == 0:
+            writePidfile()
+            si = open('/dev/null', 'r')
+            so = open('/dev/null', 'a+')
+            se = open('/dev/null', 'a+', 0)
+            os.dup2(si.fileno(), sys.stdin.fileno())
+            os.dup2(so.fileno(), sys.stdout.fileno())
+            os.dup2(se.fileno(), sys.stderr.fileno())
+
+            parseCfg( arg )
+        else:
+            sys.exit(0)
+    else:
+        sys.exit(0)
+
 def parseCfg( arg ):
+
+    # Backup arg
+    global config_arg
+    config_arg = copy.copy( arg )
+
+
+    # Register SIGHUP
+    signal.signal( signal.SIGHUP, reloadCfg )
+    # Register SIGHUP
+    signal.signal( signal.SIGTERM, closeProg )
 
     rotate = ""
     period = ""
@@ -29,7 +77,8 @@ def parseCfg( arg ):
             print i + " no enabled."
         else:
             rotate,period = cf.get(i, 'policy').split('x')
-            routine.append(( './zbackup.sh ' + i + ' ' + rotate, min(period) ))
+            routine.append(( '/usr/local/bin/zbackup ' + i + ' ' + rotate, min(period) ))
+
 
     cur_time = time.time()
 
@@ -50,22 +99,24 @@ def defaultCmd( arg ):
 
     cmd = ""
     if arg.list != None:
-        cmd += './zbackup --list '
-        cmd += ' '.join(arg.list)
+        cmd += '/usr/local/bin/zbackup --list '
+        if arg.list == []:
+            cmd += ' '.join(arg.list)
     elif arg.delete != None:
-        cmd += './zbackup --delete '
+        cmd += '/usr/local/bin/zbackup --delete '
         cmd += ' '.join(arg.delete)
     else:
         if arg.dataset != None:
             if arg.count != None:
-                cmd += './zbackup ' + arg.dataset + ' ' + arg.count
+                cmd += '/usr/local/bin/zbackup ' + arg.dataset + ' ' + arg.count
             else:
-                cmd += './zbackup ' + arg.dataset
+                cmd += '/usr/local/bin/zbackup ' + arg.dataset
         else:
             pass
 
     # Execute it
     subprocess.call( cmd.split(' ') )
+
 
 if __name__ == "__main__":
 
@@ -77,10 +128,13 @@ if __name__ == "__main__":
     parser.add_argument('--list', nargs='*')
     parser.add_argument('--delete', nargs='*')
     s = parser.parse_args()
-
     print s
+
     if s.config != '':
-        parseCfg(s)
+        if s.daemon == True:
+            daemonLize(s)
+        else:
+            parseCfg(s)
     else:
         defaultCmd(s)
 
